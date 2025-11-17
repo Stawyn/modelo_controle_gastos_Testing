@@ -11,6 +11,12 @@ export type Lancamento = {
   observacao?: string | null;
 };
 
+// Valores agregados usados na tela home para saldo e gráficos
+export type ResumoLancamentos = {
+  entradas: number;
+  saidas: number;
+};
+
 export async function listarLancamentos(limit = 50) {
   return query<Lancamento & { categoria: string; tipopagrec: string }>(
     `
@@ -39,4 +45,23 @@ export async function criarLancamento(l: Omit<Lancamento, "id">) {
 
 export async function removerLancamento(id: number) {
   await exec("DELETE FROM lancamento WHERE id = ?", [id]);
+}
+
+// Soma créditos (C) e débitos (D) direto no SQLite para evitar cálculos no app
+export async function obterResumoLancamentos(): Promise<ResumoLancamentos> {
+  const totais = await query<{ tipo: "D" | "C"; total: number }>(
+    `SELECT tipo, SUM(valor) AS total FROM lancamento GROUP BY tipo;`
+  );
+
+  return totais.reduce<ResumoLancamentos>(
+    (acc, atual) => {
+      if (atual.tipo === "C") {
+        acc.entradas = Number(atual.total) || 0;
+      } else {
+        acc.saidas = Number(atual.total) || 0;
+      }
+      return acc;
+    },
+    { entradas: 0, saidas: 0 }
+  );
 }
